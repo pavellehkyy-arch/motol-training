@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Diagnostika Bluetooth – Motol Training</title>
+<link rel="icon" type="image/png" href="favicon.png">
+<style>
+body{margin:0;background:#0a1423;color:#fff;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;padding:16px;max-width:900px;margin:auto}
+h1{font-size:22px;margin:4px 0 8px}h1 span{color:#c6ff1a}
+h2{font-size:16px;margin:18px 0 6px;color:#c6ff1a}
+p,li{font-size:14px;line-height:1.5;opacity:.9}
+button{font:inherit;color:#fff;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);border-radius:10px;padding:9px 14px;cursor:pointer;margin:3px 4px 3px 0}
+button.primary{background:#c6ff1a;color:#111;border-color:#c6ff1a;font-weight:800}
+textarea{width:100%;box-sizing:border-box;min-height:60px;font:13px ui-monospace,Menlo,Consolas,monospace;background:#111b2c;color:#fff;border:1px solid #334;border-radius:8px;padding:8px}
+#log{background:#05080f;border:1px solid #223;border-radius:8px;padding:8px;height:45vh;overflow:auto;font:12px/1.45 ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap;word-break:break-all}
+.n{color:#7dd3fc}.e{color:#f87171}.m{color:#fde047;font-weight:700}.a{color:#a78bfa}.d{color:#86efac}
+.warn{background:#7a1f2b;padding:8px 10px;border-radius:8px;font-size:13px}
+a{color:#c6ff1a}
+</style>
+</head>
+<body>
+<h1>Diagnostika <span>Bluetooth</span></h1>
+<p>Slouží ke zjištění, co posílají páčky Shimano Di2 (D-Fly), aby se jimi dalo měnit čáru na dráze. Stránka do zařízení <b>nic nezapisuje</b>, jen čte a poslouchá.</p>
+<div id="bleWarn" class="warn" style="display:none">Tento prohlížeč neumí Web Bluetooth. Použij Chrome nebo Edge na počítači či Androidu.</div>
+
+<h2>1. Příprava</h2>
+<ul>
+  <li>V aplikaci <b>E-TUBE Project</b> přiřaď skrytým tlačítkům na páčkách <b>D-FLY Ch.1</b> (levá) a <b>D-FLY Ch.2</b> (pravá).</li>
+  <li>Odpoj Di2 od Garminu (vypni Edge) a zavři E-TUBE, Bluetooth spojení může mít jen jedno zařízení.</li>
+  <li>Párování probudíš přeřazením nebo zmáčknutím tlačítka na jednotce.</li>
+</ul>
+
+<h2>2. Služby zařízení (UUID)</h2>
+<p>Prohlížeč smí číst jen služby, které mu předem vyjmenujeme. Pro Shimano jsou předvyplněné odhady. Pokud nic nenajde, zjisti skutečné UUID v mobilní aplikaci <b>nRF Connect</b> (zdarma): najdi Di2, dej Connect a opiš sem UUID všech služeb, každé na nový řádek.</p>
+<textarea id="uuids"></textarea>
+
+<h2>3. Připojení</h2>
+<button class="primary" id="connect">Vybrat zařízení a připojit</button>
+<button id="adv">Sledovat vysílání (advertising)</button>
+<button id="disc">Odpojit</button>
+
+<h2>4. Mačkej tlačítka</h2>
+<p>Před každým stiskem klikni na štítek, ať se v záznamu pozná, co jsi mačkal.</p>
+<button class="m" data-mark="LEVÉ D-Fly">◀ Teď levé</button>
+<button class="m" data-mark="PRAVÉ D-Fly">Teď pravé ▶</button>
+<button class="m" data-mark="ŘAZENÍ těžší">Řadím těžší</button>
+<button class="m" data-mark="ŘAZENÍ lehčí">Řadím lehčí</button>
+<button class="m" data-mark="dlouhý stisk">Dlouhý stisk</button>
+
+<h2>Záznam</h2>
+<button id="copy">Zkopírovat záznam</button><button id="clear">Vymazat</button><button id="onlyChanges">Jen změny: zap</button>
+<div id="log"></div>
+<p style="margin-top:14px"><a href="./">← zpět na jízdu</a></p>
+
+<script>
+(function(){
+'use strict';
+const $=id=>document.getElementById(id);
+// Odhady služeb Shimano: "SHIMANO_BLE" v ASCII je 5348494d414e4f5f424c45 → vlastní 128bit UUID
+const DEFAULT_UUIDS=['000018ef-5348-494d-414e-4f5f424c4500','000018ff-5348-494d-414e-4f5f424c4500','0000180f-0000-1000-8000-00805f9b34fb','0000180a-0000-1000-8000-00805f9b34fb'];
+let saved=null;try{saved=localStorage.getItem('diagUuids');}catch(e){}
+$('uuids').value=saved||DEFAULT_UUIDS.join('\n');
+if(!(navigator.bluetooth&&navigator.bluetooth.requestDevice))$('bleWarn').style.display='';
+
+const logEl=$('log'),lines=[];let t0=performance.now(),onlyChanges=true;const lastVal=new Map();
+const ts=()=>((performance.now()-t0)/1000).toFixed(2).padStart(8);
+function log(msg,cls){const s=ts()+'  '+msg;lines.push(s);const d=document.createElement('div');if(cls)d.className=cls;d.textContent=s;logEl.appendChild(d);logEl.scrollTop=logEl.scrollHeight;}
+const hex=dv=>{const a=[];for(let i=0;i<dv.byteLength;i++)a.push(dv.getUint8(i).toString(16).padStart(2,'0'));return a.join(' ');};
+const ascii=dv=>{let s='';for(let i=0;i<dv.byteLength;i++){const c=dv.getUint8(i);s+=c>=32&&c<127?String.fromCharCode(c):'.';}return s;};
+const short=u=>u.startsWith('0000')&&u.endsWith('-0000-1000-8000-00805f9b34fb')?'0x'+u.slice(4,8):u;
+const props=p=>Object.keys({broadcast:1,read:1,writeWithoutResponse:1,write:1,notify:1,indicate:1,authenticatedSignedWrites:1,reliableWrite:1,writableAuxiliaries:1}).filter(k=>p[k]).join(',');
+
+function parseUuids(){const out=[];for(let l of $('uuids').value.split(/[\s,;]+/)){l=l.trim().toLowerCase();if(!l)continue;
+    if(/^0x[0-9a-f]{4}$/.test(l))out.push(parseInt(l,16));else if(/^[0-9a-f]{4}$/.test(l))out.push(parseInt(l,16));
+    else if(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(l))out.push(l);else log('Neplatné UUID přeskočeno: '+l,'e');}
+  try{localStorage.setItem('diagUuids',$('uuids').value);}catch(e){}return out;}
+
+let device=null;
+async function connect(){
+  const services=parseUuids();
+  try{device=await navigator.bluetooth.requestDevice({acceptAllDevices:true,optionalServices:services});}
+  catch(e){if(e.name!=='NotFoundError')log('Výběr zařízení: '+e.message,'e');return;}
+  log('Vybráno: '+(device.name||'(bez jména)')+'  id '+device.id);
+  device.addEventListener('gattserverdisconnected',()=>log('Odpojeno','e'));
+  let server;try{server=await device.gatt.connect();log('Připojeno k GATT serveru');}catch(e){log('Připojení selhalo: '+e.message,'e');return;}
+  let svcs=[];try{svcs=await server.getPrimaryServices();}catch(e){log('Žádná z vyjmenovaných služeb na zařízení není ('+e.message+'). Doplň UUID z nRF Connect.','e');return;}
+  if(!svcs.length)log('Zařízení nemá žádnou z vyjmenovaných služeb. Doplň UUID z nRF Connect.','e');
+  for(const s of svcs){log('SLUŽBA '+short(s.uuid),'a');
+    let chs=[];try{chs=await s.getCharacteristics();}catch(e){log('  charakteristiky nelze číst: '+e.message,'e');continue;}
+    for(const c of chs){const id=short(c.uuid);log('  charakteristika '+id+'  ['+props(c.properties)+']');
+      if(c.properties.read){try{const v=await c.readValue();log('    čtení: '+hex(v)+'   |'+ascii(v)+'|','d');}catch(e){log('    čtení selhalo: '+e.message,'e');}}
+      if(c.properties.notify||c.properties.indicate){
+        c.addEventListener('characteristicvaluechanged',ev=>{const v=ev.target.value,h=hex(v);
+          if(onlyChanges&&lastVal.get(id)===h)return;lastVal.set(id,h);log('◆ '+id+'  '+h+'   |'+ascii(v)+'|','n');});
+        try{await c.startNotifications();log('    odebírám notifikace','d');}catch(e){log('    notifikace nelze zapnout: '+e.message,'e');}}}}
+  log('Hotovo. Teď mačkej tlačítka a před tím klikni na štítek.','m');}
+
+async function watchAdv(){
+  if(!device){try{device=await navigator.bluetooth.requestDevice({acceptAllDevices:true,optionalServices:parseUuids()});}catch(e){if(e.name!=='NotFoundError')log(e.message,'e');return;}}
+  if(!device.watchAdvertisements){log('Sledování vysílání není v tomto prohlížeči zapnuté. V Chromu zapni chrome://flags/#enable-experimental-web-platform-features a restartuj.','e');return;}
+  device.addEventListener('advertisementreceived',ev=>{const parts=['RSSI '+ev.rssi];
+    if(ev.uuids&&ev.uuids.length)parts.push('služby '+ev.uuids.map(short).join(' '));
+    ev.manufacturerData.forEach((v,k)=>parts.push('výrobce 0x'+k.toString(16).padStart(4,'0')+': '+hex(v)));
+    ev.serviceData.forEach((v,k)=>parts.push('data '+short(k)+': '+hex(v)));
+    const key='adv',s=parts.slice(1).join(' · ');if(onlyChanges&&lastVal.get(key)===s)return;lastVal.set(key,s);log('📡 '+parts.join(' · '),'n');});
+  try{await device.watchAdvertisements();log('Sleduji vysílání zařízení '+(device.name||device.id));}catch(e){log('Sledování vysílání selhalo: '+e.message,'e');}}
+
+$('connect').onclick=connect;$('adv').onclick=watchAdv;
+$('disc').onclick=()=>{if(device&&device.gatt.connected)device.gatt.disconnect();};
+for(const b of document.querySelectorAll('[data-mark]'))b.onclick=()=>log('──── '+b.dataset.mark+' ────','m');
+$('clear').onclick=()=>{lines.length=0;logEl.textContent='';lastVal.clear();t0=performance.now();};
+$('onlyChanges').onclick=e=>{onlyChanges=!onlyChanges;e.target.textContent='Jen změny: '+(onlyChanges?'zap':'vyp');};
+$('copy').onclick=async()=>{const txt='Motol Training – diagnostika BT\n'+navigator.userAgent+'\nUUID: '+$('uuids').value.replace(/\n/g,' ')+'\n\n'+lines.join('\n');
+  try{await navigator.clipboard.writeText(txt);log('Záznam zkopírován do schránky','d');}catch(e){const ta=document.createElement('textarea');ta.value=txt;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();log('Záznam zkopírován','d');}};
+})();
+</script>
+</body>
+</html>
