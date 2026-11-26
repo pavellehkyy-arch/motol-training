@@ -51,9 +51,20 @@ trainer.onStatus=s=>{$('trStatus').textContent=trainer.name+': '+s+(trainer.kind
 trainer.onLog=s=>toast(s);
 hrm.onHr=h=>{S.hr=h;};hrm.onStatus=s=>{$('hrStatus').textContent='Pás: '+s;};
 
-async function connectTrainer(){try{await trainer.connect();S.src='trainer';$('setup').classList.add('hide');applyResistance(true);}
-  catch(e){if(e.name!=='NotFoundError')toast(e.message);}}
-async function connectHr(){try{await hrm.connect();}catch(e){if(e.name!=='NotFoundError')toast(e.message);}}
+// srozumitelná hláška z chyby Web Bluetooth; null = uživatel jen zavřel výběr zařízení
+function bleError(e){const m=(e&&e.message)||String(e);
+  if(e&&e.name==='NotFoundError'&&/cancel/i.test(m))return null;
+  if(/adapter not available|Bluetooth adapter/i.test(m))return 'Bluetooth v počítači je vypnutý nebo chybí. Zapni ho a zkus to znovu.';
+  if(e&&e.name==='SecurityError')return 'Prohlížeč Bluetooth nepovolil: stránka musí běžet přes HTTPS (nebo localhost) a ne ve vloženém okně.';
+  if(e&&e.name==='NotAllowedError')return 'Prohlížeč přístup k Bluetooth zakázal. Povol ho v nastavení webu (ikona zámku vedle adresy).';
+  if(e&&e.name==='NetworkError')return 'Spojení se nepodařilo. Je trenažér zapnutý a odpojený z jiných aplikací (Zwift, Tacx)?';
+  return m;}
+async function connectTrainer(){$('trStatus').textContent='Trenažér: hledám…';
+  try{await trainer.connect();S.src='trainer';$('setup').classList.add('hide');applyResistance(true);}
+  catch(e){console.warn('Trenažér:',e);const m=bleError(e);$('trStatus').textContent='Trenažér: '+(m?'chyba – '+m:'nepřipojen');if(m)toast(m);}}
+async function connectHr(){$('hrStatus').textContent='Pás: hledám…';
+  try{await hrm.connect();}
+  catch(e){console.warn('Pás:',e);const m=bleError(e);$('hrStatus').textContent='Pás: '+(m?'chyba – '+m:'nepřipojen');if(m)toast(m);}}
 
 // odpor: ERG drží watty; simulace posílá „sklon“ při změně výšky v klopení
 let lastSimSent=0,lastGrade=0;
