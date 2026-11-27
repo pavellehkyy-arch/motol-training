@@ -19,5 +19,5 @@ Webová aplikace pro trénink na chytrém trenažéru (Tacx Neo 2T, FTMS přes W
 ## Vydávání a zálohy
 
 - Hotové změny slučuj do `main` automaticky, bez ptaní (GitHub Pages: https://pavellehkyy-arch.github.io/motol-training/). Po sloučení napiš uživateli odkaz.
-- Před každým sloučením nech zálohu: na stávající `main` dej tag `zaloha-RRRR-MM-DD-HHMM` (čas Europe/Prague) a pushni ho. Slučuj přes `git merge --no-ff`, aby šla každá verze dohledat.
-- Historii `main` nikdy nepřepisuj (žádný force-push). Návrat ke staré verzi = nový commit, který obnoví soubory ze zálohy (`git checkout <tag> -- .`).
+- Před každým sloučením nech zálohu: ze stávající `main` vytvoř větev `zaloha-RRRR-MM-DD-HHMM` (čas Europe/Prague) přes GitHub MCP `create_branch` (git push tagů a cizích větví proxy odmítá). Slučuj přes `git merge --no-ff`, aby šla každá verze dohledat.
+- Historii `main` nikdy nepřepisuj (žádný force-push). Návrat ke staré verzi = nový commit, který obnoví soubory ze zálohy (`git checkout origin/zaloha-… -- .`).
