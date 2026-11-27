@@ -27,19 +27,19 @@ button.primary{background:var(--acc);color:#111;border-color:var(--acc)}
 #pwBox{border-bottom:5px solid var(--z,#9aa0a6)}
 #pwBox b{font-size:46px}
 /* vlevo: jízda a kola */
-#left{position:fixed;left:10px;top:10px;padding:10px 14px;font-size:14px;line-height:1.55;min-width:180px;font-variant-numeric:tabular-nums}
+#left{position:fixed;left:10px;top:10px;padding:8px 12px;font-size:14px;line-height:1.5;min-width:150px;font-variant-numeric:tabular-nums}
 #left .row{display:flex;justify-content:space-between;gap:14px}#left .row span:last-child{font-weight:800}
-#left h4{margin:6px 0 2px;font-size:11px;opacity:.7;text-transform:uppercase;letter-spacing:.06em}
-#modeInfo{font-weight:800;color:var(--acc)}
+#modeInfo{font-size:12px;font-weight:800;color:var(--acc)}
 #draft{display:none;margin-top:6px;padding:3px 8px;border-radius:6px;background:#22c55e;color:#062;font-weight:800;text-align:center}#draft.on{display:block}
-/* vpravo: ovládání */
-#right{position:fixed;right:10px;top:10px;padding:10px;display:flex;flex-direction:column;gap:6px;width:200px}
-#right .pair{display:flex;gap:6px;align-items:center;justify-content:space-between}
-#right .pair button{min-width:40px}
-#line{position:fixed;right:10px;bottom:14px;display:flex;flex-direction:column;align-items:center;gap:6px;padding:8px}
-#line button{font-size:22px;width:64px;height:52px}
-#lineName{font-size:12px;opacity:.85}
-#demoBox{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);padding:10px 16px;width:min(520px,70vw);text-align:center}
+/* vpravo: jedno tlačítko menu, pod ním rozbalené ovládání */
+#menuBtn{position:fixed;right:10px;top:10px;width:46px;height:46px;padding:0;font-size:22px;z-index:6}
+#menu{position:fixed;right:10px;top:62px;padding:8px;display:flex;flex-direction:column;gap:6px;width:200px;z-index:6;max-height:calc(100% - 140px);overflow:auto}
+#menu .pair{display:flex;gap:6px;align-items:center;justify-content:space-between}
+#menu .pair button{min-width:40px}
+#line{position:fixed;right:10px;bottom:14px;display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px}
+#line button{font-size:20px;width:52px;height:44px;padding:0}
+#lineName{font-size:11px;opacity:.85}
+#demoBox{position:fixed;left:50%;bottom:10px;transform:translateX(-50%);padding:6px 14px;width:min(420px,60vw);text-align:center;font-size:13px}
 #demoBox input{width:100%}
 #lapFlash{position:fixed;left:50%;top:28%;transform:translateX(-50%);font-size:30px;font-weight:900;text-shadow:0 3px 14px rgba(0,0,0,.7);opacity:0;pointer-events:none;white-space:nowrap}
 #lapFlash.show{animation:flash 3s ease both}
@@ -56,8 +56,8 @@ button.primary{background:var(--acc);color:#111;border-color:var(--acc)}
 #bleWarn{background:#7a1f2b;padding:8px 10px;border-radius:8px;font-size:13px;margin-bottom:8px}
 #summary table{width:100%;border-collapse:collapse;margin:8px 0 12px}#summary td{padding:6px 4px;border-bottom:1px solid rgba(255,255,255,.12)}#summary td:last-child{text-align:right;font-weight:800}
 #loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#0a1423;z-index:20;font-size:20px;font-weight:800}
-@media (max-width:820px){#left{font-size:12px;min-width:150px}.m{min-width:66px;padding:4px 8px}.m b{font-size:24px}#pwBox b{font-size:32px}#right{width:160px;font-size:13px}#top{top:6px}}
-@media (max-height:500px){#left h4,#left .opt{display:none}#right{gap:4px}#right button{padding:5px 8px}}
+@media (max-width:820px){#left{font-size:12px;min-width:120px}.m{min-width:66px;padding:4px 8px}.m b{font-size:24px}#pwBox b{font-size:32px}#menu{width:170px;font-size:13px}#top{top:6px}}
+@media (max-height:500px){#menu{gap:4px}#menu button{padding:5px 8px}}
 </style>
 </head>
 <body>
@@ -68,33 +68,30 @@ button.primary{background:var(--acc);color:#111;border-color:var(--acc)}
   <div class="m panel" id="pwBox"><b id="pw">0</b><small>W</small></div>
   <div class="m panel"><b id="spd">0.0</b><small>km/h</small></div>
   <div class="m panel"><b id="cad">0</b><small>ot/min</small></div>
-  <div class="m panel"><b id="hr">–</b><small>tep</small></div>
+  <div class="m panel hide" id="hrBox"><b id="hr">–</b><small>tep</small></div>
 </div>
 
 <div id="left" class="panel">
   <div id="modeInfo">–</div>
   <div class="row"><span>Čas</span><span id="time">0:00</span></div>
   <div class="row"><span>Vzdálenost</span><span><span id="dist">0.00</span> km</span></div>
-  <div class="row"><span>Průměr</span><span><span id="avgP">0</span> W</span></div>
-  <div class="row"><span>W/kg</span><span id="wkg">0.0</span></div>
-  <h4>Kola</h4>
   <div class="row"><span>Kolo</span><span id="lapN">0</span></div>
-  <div class="row"><span>Aktuální</span><span id="lapCur">–</span></div>
   <div class="row"><span>Poslední</span><span id="lapLast">–</span></div>
   <div class="row"><span>Nejlepší</span><span id="lapBest">–</span></div>
-  <div class="row opt" id="pacerGap" style="display:none"></div>
+  <div class="row" id="pacerGap" style="display:none"></div>
   <div id="draft">V závětří −33 % odporu vzduchu</div>
 </div>
 
-<div id="right" class="panel">
+<button id="menuBtn" class="panel" title="Menu">☰</button>
+<div id="menu" class="panel hide">
   <button id="modeBtn">Režim: simulace</button>
   <div id="ergBox" class="pair" style="display:none"><button id="ergMinus">−</button><span><b id="ergVal">180</b> W</span><button id="ergPlus">+</button></div>
   <button id="pacerBtn">Vodič</button>
   <div class="pair"><button id="pacerMinus">−</button><span><b id="pacerKmh">40</b> km/h</span><button id="pacerPlus">+</button></div>
   <button id="camBtn">📷 za jezdcem</button>
   <button id="settingsBtn">Připojení a nastavení</button>
-  <button id="fsBtn">Celá obrazovka</button>
   <button id="endBtn">Souhrn jízdy</button>
+  <button id="fsBtn">Celá obrazovka</button>
 </div>
 
 <div id="line" class="panel">
@@ -122,7 +119,7 @@ button.primary{background:var(--acc);color:#111;border-color:var(--acc)}
     <label>Tvoje hmotnost (kg) <input id="mass" type="number" min="30" max="200" step="1"></label>
     <label>FTP (W) <input id="ftp" type="number" min="50" max="600" step="5"></label>
     <p style="font-size:13px;margin:10px 0 0"><a href="diag.html" style="color:#c6ff1a">Diagnostika Bluetooth (páčky Di2)</a></p>
-    <p style="font-size:12px;opacity:.7;margin-top:12px">Ovládání: šipky ▲▼ mění čáru na dráze (páčky Di2: levé skryté tlačítko níž, pravé výš; dlouhý stisk levého přepne kameru, pravého zapne vodiče), C přepíná kameru, + a − mění watty v ERG. Před připojením zapni trenažér a odpoj ho z ostatních aplikací (Zwift, Tacx app), Bluetooth spojení může mít jen jedna.</p>
+    <p style="font-size:12px;opacity:.7;margin-top:12px">Ovládání: ťuknutí do obrazu přepne kameru, ☰ otevře menu (režim, vodič, souhrn). Šipky ▲▼ mění čáru na dráze (páčky Di2: levé skryté tlačítko níž, pravé výš; dlouhý stisk levého přepne kameru, pravého zapne vodiče), C přepíná kameru, + a − mění watty v ERG. Před připojením zapni trenažér a odpoj ho z ostatních aplikací (Zwift, Tacx app), Bluetooth spojení může mít jen jedna.</p>
   </div>
 </div>
 

@@ -149,15 +149,12 @@ function hud(dt){pAvg3+=(S.power-pAvg3)*Math.min(1,dt/1.5);hudT-=dt;if(hudT>0)re
   $('pw').textContent=Math.round(pAvg3);
   $('spd').textContent=(S.v*3.6).toFixed(1);
   $('cad').textContent=Math.round(S.cadence);
-  $('hr').textContent=S.hr?S.hr:'–';
+  $('hr').textContent=S.hr?S.hr:'–';$('hrBox').classList.toggle('hide',!S.hr);
   $('dist').textContent=(S.dist/1000).toFixed(2);
   $('time').textContent=fmtH(S.time);
   $('lapN').textContent=S.laps.length;
-  $('lapCur').textContent=S.lapStart!=null?fmt(S.time-S.lapStart):'–';
   $('lapLast').textContent=S.laps.length?fmt(S.laps[S.laps.length-1]):'–';
   $('lapBest').textContent=S.laps.length?fmt(Math.min(...S.laps)):'–';
-  $('avgP').textContent=S.time>0?Math.round(S.energyJ/S.time):0;
-  $('wkg').textContent=(pAvg3/CFG.mass).toFixed(1);
   $('lineName').textContent=LINES[S.line].n;
   $('draft').classList.toggle('on',S.draft);
   if(S.pacerOn){const gap=((S.pacerS-S.s)%L0+L0)%L0,g=gap>L0/2?gap-L0:gap;$('pacerGap').textContent=(g>=0?'vodič ':'vodič za tebou ')+Math.abs(g).toFixed(1)+' m';}
@@ -165,11 +162,16 @@ function hud(dt){pAvg3+=(S.power-pAvg3)*Math.min(1,dt/1.5);hudT-=dt;if(hudT>0)re
   $('modeInfo').textContent=S.src==='trainer'?(CFG.mode==='erg'?'ERG '+CFG.erg+' W':'Simulace'+(S.gradeNow>0.5?' · stoupání '+S.gradeNow.toFixed(1)+' %':'')):'Demo (bez trenažéru)';
   const zone=clamp(pAvg3/CFG.ftp,0,2);$('pwBox').style.setProperty('--z',zone<0.55?'#9aa0a6':zone<0.75?'#3b82f6':zone<0.9?'#22c55e':zone<1.05?'#eab308':zone<1.2?'#f97316':'#ef4444');}
 function lapFlash(t){const el=$('lapFlash');el.textContent='Kolo '+S.laps.length+' · '+fmt(t)+(t<=Math.min(...S.laps)?' · nejlepší!':'');el.classList.remove('show');void el.offsetWidth;el.classList.add('show');}
-let toastT=null;function toast(msg){const el=$('toast');el.textContent=msg;el.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove('show'),5000);}
+let toastT=null;function toast(msg,ms){const el=$('toast');el.textContent=msg;el.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove('show'),ms||5000);}
 
 // ---------- ovládání ----------
 function setLine(d){S.line=clamp(S.line+d,0,LINES.length-1);}
-function cycleCam(){camMode=(camMode+1)%CAMS.length;$('camBtn').textContent='📷 '+CAMS[camMode];}
+function cycleCam(){camMode=(camMode+1)%CAMS.length;$('camBtn').textContent='📷 '+CAMS[camMode];toast('Kamera: '+CAMS[camMode],1500);}
+// menu ☰: otevře/zavře ovládání; ťuknutí do obrazu menu zavře, nebo přepne kameru
+const menuOpen=()=>!$('menu').classList.contains('hide');
+function showMenu(on){$('menu').classList.toggle('hide',!on);$('line').classList.toggle('hide',on);$('menuBtn').classList.toggle('on',on);}
+$('menuBtn').onclick=()=>showMenu(!menuOpen());
+$('c').addEventListener('click',()=>{if(menuOpen())showMenu(false);else cycleCam();});
 function refreshButtons(){$('modeBtn').textContent=CFG.mode==='erg'?'Režim: ERG':'Režim: simulace';$('ergBox').style.display=CFG.mode==='erg'?'':'none';$('ergVal').textContent=CFG.erg;
   $('pacerBtn').classList.toggle('on',S.pacerOn);$('pacerKmh').textContent=CFG.pacerKmh;$('demoBox').style.display=S.src==='trainer'?'none':'';}
 addEventListener('keydown',e=>{if(e.target.tagName==='INPUT')return;
@@ -188,8 +190,8 @@ $('pacerPlus').onclick=()=>{CFG.pacerKmh=Math.min(70,CFG.pacerKmh+1);saveCfg();r
 $('demoP').oninput=e=>{demoPower=+e.target.value;$('demoVal').textContent=demoPower;};
 $('connectBtn').onclick=connectTrainer;$('hrBtn').onclick=connectHr;$('di2Btn').onclick=connectDi2;
 $('demoBtn').onclick=()=>{S.src='demo';$('setup').classList.add('hide');refreshButtons();};
-$('settingsBtn').onclick=()=>{$('setup').classList.remove('hide');};
-$('endBtn').onclick=showSummary;$('sumClose').onclick=()=>$('summary').classList.add('hide');
+$('settingsBtn').onclick=()=>{showMenu(false);$('setup').classList.remove('hide');};
+$('endBtn').onclick=()=>{showMenu(false);showSummary();};$('sumClose').onclick=()=>$('summary').classList.add('hide');
 $('sumReset').onclick=()=>{Object.assign(S,{dist:0,time:0,energyJ:0,maxP:0,laps:[],lapStart:null});V.drawLapBoard(0);$('summary').classList.add('hide');};
 for(const k of ['mass','ftp']){const el=$(k);el.value=CFG[k];el.onchange=()=>{const v=+el.value;if(v>0){CFG[k]=v;saveCfg();}};}
 $('fsBtn').onclick=()=>{const d=document.documentElement;if(!document.fullscreenElement)(d.requestFullscreen||d.webkitRequestFullscreen||(()=>{})).call(d);else document.exitFullscreen();};
