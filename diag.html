@@ -21,7 +21,7 @@ a{color:#c6ff1a}
 </head>
 <body>
 <h1>Diagnostika <span>Bluetooth</span></h1>
-<p>Slouží ke zjištění, co posílají páčky Shimano Di2 (D-Fly), aby se jimi dalo měnit čáru na dráze. Stránka do zařízení <b>nic nezapisuje</b>, jen čte a poslouchá.</p>
+<p>Slouží ke zjištění, co posílají páčky Shimano Di2 (D-Fly) nebo trenažér. Stránka do zařízení <b>nic nezapisuje</b>, jen čte a poslouchá.</p>
 <div id="bleWarn" class="warn" style="display:none">Tento prohlížeč neumí Web Bluetooth. Použij Chrome nebo Edge na počítači či Androidu.</div>
 
 <h2>1. Příprava</h2>
@@ -47,6 +47,8 @@ a{color:#c6ff1a}
 <button class="m" data-mark="ŘAZENÍ těžší">Řadím těžší</button>
 <button class="m" data-mark="ŘAZENÍ lehčí">Řadím lehčí</button>
 <button class="m" data-mark="dlouhý stisk">Dlouhý stisk</button>
+<button class="m" data-mark="ŠLAPU">Šlapu</button>
+<button class="m" data-mark="STOJÍM">Přestal jsem šlapat</button>
 
 <h2>Záznam</h2>
 <button id="copy">Zkopírovat záznam</button><button id="clear">Vymazat</button><button id="onlyChanges">Jen změny: zap</button>
@@ -58,9 +60,11 @@ a{color:#c6ff1a}
 'use strict';
 const $=id=>document.getElementById(id);
 // Odhady služeb Shimano: "SHIMANO_BLE" v ASCII je 5348494d414e4f5f424c45 → vlastní 128bit UUID
-const DEFAULT_UUIDS=['000018ef-5348-494d-414e-4f5f424c4500','000018ff-5348-494d-414e-4f5f424c4500','0000180f-0000-1000-8000-00805f9b34fb','0000180a-0000-1000-8000-00805f9b34fb'];
+// Trenažéry: FTMS 1826, Cycling Power 1818, tep 180D, Tacx FE-C přes BLE (6E40FEC1-…)
+const DEFAULT_UUIDS=['000018ef-5348-494d-414e-4f5f424c4500','000018ff-5348-494d-414e-4f5f424c4500','000018fe-5348-494d-414e-4f5f424c4500','0000180f-0000-1000-8000-00805f9b34fb','0000180a-0000-1000-8000-00805f9b34fb',
+  '00001826-0000-1000-8000-00805f9b34fb','00001818-0000-1000-8000-00805f9b34fb','0000180d-0000-1000-8000-00805f9b34fb','00001816-0000-1000-8000-00805f9b34fb','6e40fec1-b5a3-f393-e0a9-e50e24dcca9e'];
 let saved=null;try{saved=localStorage.getItem('diagUuids');}catch(e){}
-$('uuids').value=saved||DEFAULT_UUIDS.join('\n');
+{const have=new Set((saved||'').toLowerCase().split(/[\s,;]+/).filter(Boolean));const all=[...have];for(const u of DEFAULT_UUIDS)if(!have.has(u))all.push(u);$('uuids').value=all.join('\n');}
 if(!(navigator.bluetooth&&navigator.bluetooth.requestDevice))$('bleWarn').style.display='';
 
 const logEl=$('log'),lines=[];let t0=performance.now(),onlyChanges=true;const lastVal=new Map();
@@ -68,43 +72,44 @@ const ts=()=>((performance.now()-t0)/1000).toFixed(2).padStart(8);
 function log(msg,cls){const s=ts()+'  '+msg;lines.push(s);const d=document.createElement('div');if(cls)d.className=cls;d.textContent=s;logEl.appendChild(d);logEl.scrollTop=logEl.scrollHeight;}
 const hex=dv=>{const a=[];for(let i=0;i<dv.byteLength;i++)a.push(dv.getUint8(i).toString(16).padStart(2,'0'));return a.join(' ');};
 const ascii=dv=>{let s='';for(let i=0;i<dv.byteLength;i++){const c=dv.getUint8(i);s+=c>=32&&c<127?String.fromCharCode(c):'.';}return s;};
+const em=e=>(e&&e.message)||(e&&e.name)||String(e);
 const short=u=>u.startsWith('0000')&&u.endsWith('-0000-1000-8000-00805f9b34fb')?'0x'+u.slice(4,8):u;
 const props=p=>Object.keys({broadcast:1,read:1,writeWithoutResponse:1,write:1,notify:1,indicate:1,authenticatedSignedWrites:1,reliableWrite:1,writableAuxiliaries:1}).filter(k=>p[k]).join(',');
 
 function parseUuids(){const out=[];for(let l of $('uuids').value.split(/[\s,;]+/)){l=l.trim().toLowerCase();if(!l)continue;
-    if(/^0x[0-9a-f]{4}$/.test(l))out.push(parseInt(l,16));else if(/^[0-9a-f]{4}$/.test(l))out.push(parseInt(l,16));
+    if(/^(0x)?[0-9a-f]{4}$/.test(l))out.push('0000'+l.slice(-4)+'-0000-1000-8000-00805f9b34fb');
     else if(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(l))out.push(l);else log('Neplatné UUID přeskočeno: '+l,'e');}
-  try{localStorage.setItem('diagUuids',$('uuids').value);}catch(e){}return out;}
+  try{localStorage.setItem("diagUuids",$("uuids").value);}catch(e){}return [...new Set(out)];}
 
 let device=null;
 async function connect(){
   const services=parseUuids();
   try{device=await navigator.bluetooth.requestDevice({acceptAllDevices:true,optionalServices:services});}
-  catch(e){if(e.name!=='NotFoundError')log('Výběr zařízení: '+e.message,'e');return;}
+  catch(e){if(e.name!=='NotFoundError')log('Výběr zařízení: '+em(e),'e');return;}
   log('Vybráno: '+(device.name||'(bez jména)')+'  id '+device.id);
   device.addEventListener('gattserverdisconnected',()=>log('Odpojeno','e'));
-  let server;try{server=await device.gatt.connect();log('Připojeno k GATT serveru');}catch(e){log('Připojení selhalo: '+e.message,'e');return;}
-  let svcs=[];try{svcs=await server.getPrimaryServices();}catch(e){log('Žádná z vyjmenovaných služeb na zařízení není ('+e.message+'). Doplň UUID z nRF Connect.','e');return;}
+  let server;try{server=await device.gatt.connect();log('Připojeno k GATT serveru');}catch(e){log('Připojení selhalo: '+em(e),'e');return;}
+  let svcs=[];try{svcs=await server.getPrimaryServices();}catch(e){log('Žádná z vyjmenovaných služeb na zařízení není ('+em(e)+'). Doplň UUID z nRF Connect.','e');return;}
   if(!svcs.length)log('Zařízení nemá žádnou z vyjmenovaných služeb. Doplň UUID z nRF Connect.','e');
   for(const s of svcs){log('SLUŽBA '+short(s.uuid),'a');
-    let chs=[];try{chs=await s.getCharacteristics();}catch(e){log('  charakteristiky nelze číst: '+e.message,'e');continue;}
+    let chs=[];try{chs=await s.getCharacteristics();}catch(e){log('  charakteristiky nelze číst: '+em(e),'e');continue;}
     for(const c of chs){const id=short(c.uuid);log('  charakteristika '+id+'  ['+props(c.properties)+']');
-      if(c.properties.read){try{const v=await c.readValue();log('    čtení: '+hex(v)+'   |'+ascii(v)+'|','d');}catch(e){log('    čtení selhalo: '+e.message,'e');}}
+      if(c.properties.read){try{const v=await c.readValue();log('    čtení: '+hex(v)+'   |'+ascii(v)+'|','d');}catch(e){log('    čtení selhalo: '+em(e),'e');}}
       if(c.properties.notify||c.properties.indicate){
         c.addEventListener('characteristicvaluechanged',ev=>{const v=ev.target.value,h=hex(v);
           if(onlyChanges&&lastVal.get(id)===h)return;lastVal.set(id,h);log('◆ '+id+'  '+h+'   |'+ascii(v)+'|','n');});
-        try{await c.startNotifications();log('    odebírám notifikace','d');}catch(e){log('    notifikace nelze zapnout: '+e.message,'e');}}}}
+        try{await c.startNotifications();log('    odebírám notifikace','d');}catch(e){log('    notifikace nelze zapnout: '+em(e),'e');}}}}
   log('Hotovo. Teď mačkej tlačítka a před tím klikni na štítek.','m');}
 
 async function watchAdv(){
-  if(!device){try{device=await navigator.bluetooth.requestDevice({acceptAllDevices:true,optionalServices:parseUuids()});}catch(e){if(e.name!=='NotFoundError')log(e.message,'e');return;}}
+  if(!device){try{device=await navigator.bluetooth.requestDevice({acceptAllDevices:true,optionalServices:parseUuids()});}catch(e){if(e.name!=='NotFoundError')log(em(e),'e');return;}}
   if(!device.watchAdvertisements){log('Sledování vysílání není v tomto prohlížeči zapnuté. V Chromu zapni chrome://flags/#enable-experimental-web-platform-features a restartuj.','e');return;}
   device.addEventListener('advertisementreceived',ev=>{const parts=['RSSI '+ev.rssi];
     if(ev.uuids&&ev.uuids.length)parts.push('služby '+ev.uuids.map(short).join(' '));
     ev.manufacturerData.forEach((v,k)=>parts.push('výrobce 0x'+k.toString(16).padStart(4,'0')+': '+hex(v)));
     ev.serviceData.forEach((v,k)=>parts.push('data '+short(k)+': '+hex(v)));
     const key='adv',s=parts.slice(1).join(' · ');if(onlyChanges&&lastVal.get(key)===s)return;lastVal.set(key,s);log('📡 '+parts.join(' · '),'n');});
-  try{await device.watchAdvertisements();log('Sleduji vysílání zařízení '+(device.name||device.id));}catch(e){log('Sledování vysílání selhalo: '+e.message,'e');}}
+  try{await device.watchAdvertisements();log('Sleduji vysílání zařízení '+(device.name||device.id));}catch(e){log('Sledování vysílání selhalo: '+em(e),'e');}}
 
 $('connect').onclick=connect;$('adv').onclick=watchAdv;
 $('disc').onclick=()=>{if(device&&device.gatt.connected)device.gatt.disconnect();};
