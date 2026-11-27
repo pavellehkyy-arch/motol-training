@@ -12,10 +12,10 @@ Trénink na chytrém trenažéru ve 3D Velodromu Praha-Motol, něco jako Rouvy n
 - **Režim simulace:** trenažér dostává sklon, takže při stoupání do klopení přitlačí.
 - **Režim ERG:** trenažér drží nastavené watty (tlačítka − / + v menu ☰ nebo klávesy − / +).
 - **Vodič:** jezdec, který jede nastavenou rychlostí. Když se za něj zavěsíš (do 2,5 m), máš o třetinu menší odpor vzduchu.
-- Volba čáry na dráze: černá, sprinterská, stayerská, nahoře, u mantinelu (šipky ▲▼).
+- Volba čáry na dráze: černá, sprinterská, stayerská, nahoře, u mantinelu (páčky Di2 nebo šipky na klávesnici).
 - Časy kol, nejlepší kolo, souhrn jízdy (čas, vzdálenost, průměrný a maximální výkon, kJ).
 - Kamery: za jezdcem, z kola, televizní, z výšky (ťuknutí do obrazu nebo klávesa C).
-- Ovládání je schované v menu ☰ vpravo nahoře (režim, vodič, kamera, připojení, souhrn, celá obrazovka). Na obrazovce zůstávají jen šipky ▲▼ pro čáru na dráze.
+- Ovládání je schované v menu ☰ vpravo nahoře (režim, vodič, kamera, připojení, souhrn, celá obrazovka). Čára na dráze se mění páčkami Di2 nebo šipkami na klávesnici.
 - Bez trenažéru jde vyzkoušet v demu s posuvníkem výkonu.
 
 ## Kde to funguje
