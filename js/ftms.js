@@ -12,7 +12,10 @@ const u16=n=>'0000'+n.toString(16).padStart(4,'0')+'-0000-1000-8000-00805f9b34fb
 const FTMS_SVC=u16(0x1826),IBD=u16(0x2ad2),CP=u16(0x2ad9),STATUS=u16(0x2ada);
 const CPS_SVC=u16(0x1818),CPM=u16(0x2a63);
 const HR_SVC=u16(0x180d),HRM=u16(0x2a37);
-const DIS_SVC=u16(0x180a);
+const DIS_SVC=u16(0x180a),BAT_SVC=u16(0x180f);
+// Shimano Di2 (12rychlostní, přehazovačka RD-…): vlastní služba, "SHIMANO_BLE" v ASCII
+const shi=n=>'0000'+n.toString(16).padStart(4,'0')+'-5348-494d-414e-4f5f424c4500';
+const DI2_SVC=shi(0x18ef),DI2_GEAR=shi(0x2ac1),DI2_BTN=shi(0x2ac2);
 
 // Chyba s označením kroku, ve kterém vznikla. Bluefy občas místo Error vrátí číslo nebo řetězec.
 function stepErr(step,e){
@@ -157,5 +160,49 @@ class HeartRate{
   disconnect(){if(this.device&&this.device.gatt.connected)this.device.gatt.disconnect();}
 }
 
-window.BLE={supported,Trainer,HeartRate,parseIndoorBikeData,makeCpsParser,parseHr};
+// Páčky Di2: tlačítka D-FLY chodí jako indikace 0x2AC2: [počítadlo, kanál 1, kanál 2, kanál 3, kanál 4].
+// Bajt kanálu: horní půlbajt = akce (1 krátký stisk, 2 dlouhý stisk, 3 drží dál, 0 puštěno), dolní = počítadlo stisků; 0xF0 = kanál nic neposlal.
+// Přehazování chodí v 0x2AC1 (typ 0x00): bajt 3 = převodník, bajt 5 = pastorek, bajt 6 = počet pastorků.
+function parseDi2Buttons(dv,prev){const out=[];
+  for(let ch=1;ch<=4&&ch<dv.byteLength;ch++){const b=dv.getUint8(ch);if(b===0xf0||b===prev[ch])continue;
+    prev[ch]=b;const a=b>>4;out.push({ch,action:a===1?'short':a===2?'long':a===3?'hold':'release'});}
+  return out;}
+function parseDi2Gear(dv){if(dv.byteLength<7||dv.getUint8(0)!==0x00)return null;
+  return {front:dv.getUint8(3),rear:dv.getUint8(5),rears:dv.getUint8(6)};}
+
+class Di2{
+  constructor(){this.device=null;this.onButton=null;this.onGear=null;this.onStatus=null;this.onLog=null;this._prev=[];this._want=false;this.wide=false;}
+  get name(){return this.device&&this.device.name||'Di2';}
+  status(s){this.onStatus&&this.onStatus(s);}
+  async connect(){
+    if(!supported())throw new Error('Tento prohlížeč neumí Web Bluetooth.');
+    if(this.device&&this.device.gatt&&this.device.gatt.connected)try{this.device.gatt.disconnect();}catch(e){}
+    this.device=null;const optionalServices=[DI2_SVC,BAT_SVC,DIS_SVC];
+    if(!this.wide){
+      try{this.device=await navigator.bluetooth.requestDevice({filters:[{namePrefix:'RD'},{services:[DI2_SVC]}],optionalServices});}
+      catch(e){if(isCancel(e))throw stepErr('výběr Di2',e);this.wide=true;}}
+    if(!this.device){
+      try{this.device=await navigator.bluetooth.requestDevice({acceptAllDevices:true,optionalServices});}
+      catch(e){if(e&&e.name==='SecurityError')throw stepErr('výběr Di2',new Error('Ťukni na Připojit znovu, ukážu všechna zařízení.'));throw stepErr('výběr Di2',e);}}
+    this.device.addEventListener('gattserverdisconnected',()=>this._onDisconnect());
+    this._want=true;await this._setup();}
+  async _setup(){
+    this.status('připojuji…');this._prev=[];
+    const server=await at('spojení s Di2',()=>gattConnect(this.device));
+    const svc=await at('služba Shimano',()=>server.getPrimaryService(DI2_SVC));
+    const btn=await at('tlačítka Di2',()=>svc.getCharacteristic(DI2_BTN));
+    btn.addEventListener('characteristicvaluechanged',e=>{for(const ev of parseDi2Buttons(e.target.value,this._prev))this.onButton&&this.onButton(ev);});
+    await at('zapnutí tlačítek',()=>btn.startNotifications());
+    try{const g=await svc.getCharacteristic(DI2_GEAR);
+      g.addEventListener('characteristicvaluechanged',e=>{const r=parseDi2Gear(e.target.value);if(r&&this.onGear)this.onGear(r);});
+      await g.startNotifications();}catch(e){}
+    this.status('připojeno');}
+  async _onDisconnect(){if(!this._want){this.status('odpojeno');return;}
+    this.status('spojení ztraceno, zkouším znovu…');
+    for(let i=0;i<5&&this._want;i++){await wait(1500*(i+1));try{await this._setup();return;}catch(e){}}
+    this.status('odpojeno');}
+  disconnect(){this._want=false;if(this.device&&this.device.gatt.connected)this.device.gatt.disconnect();}
+}
+
+window.BLE={supported,Trainer,HeartRate,Di2,parseDi2Buttons,parseDi2Gear,parseIndoorBikeData,makeCpsParser,parseHr};
 })();

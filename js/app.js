@@ -66,6 +66,15 @@ function bleError(e){const m=(e&&e.message!=null?String(e.message):String(e)).tr
 async function connectTrainer(){$('trStatus').textContent='Trenažér: hledám…';
   try{await trainer.connect();S.src='trainer';$('setup').classList.add('hide');applyResistance(true);}
   catch(e){console.warn('Trenažér:',e);const m=bleError(e);$('trStatus').textContent='Trenažér: '+(m?'chyba – '+m:'nepřipojen');if(m)toast(m);}}
+// páčky Di2: D-FLY kanál 1 = levá páčka, kanál 2 = pravá
+const di2=new BLE.Di2();
+di2.onStatus=s=>{$('di2Status').textContent='Páčky '+di2.name+': '+s;};
+di2.onButton=ev=>{if(ev.action==='short'){if(ev.ch===1)setLine(-1);else if(ev.ch===2)setLine(1);}
+  else if(ev.action==='long'){if(ev.ch===1)cycleCam();else if(ev.ch===2)$('pacerBtn').onclick();}};
+di2.onGear=g=>{S.gear=g;$('di2Status').textContent='Páčky '+di2.name+': připojeno, převod '+g.front+' × '+g.rear+'/'+g.rears;};
+async function connectDi2(){$('di2Status').textContent='Páčky: hledám…';
+  try{await di2.connect();}
+  catch(e){console.warn('Di2:',e);const m=bleError(e);$('di2Status').textContent='Páčky: '+(m?'chyba – '+m:'nepřipojeny');if(m)toast(m);}}
 async function connectHr(){$('hrStatus').textContent='Pás: hledám…';
   try{await hrm.connect();}
   catch(e){console.warn('Pás:',e);const m=bleError(e);$('hrStatus').textContent='Pás: '+(m?'chyba – '+m:'nepřipojen');if(m)toast(m);}}
@@ -177,7 +186,7 @@ $('pacerBtn').onclick=()=>{S.pacerOn=!S.pacerOn;pacer.g.visible=S.pacerOn;if(S.p
 $('pacerMinus').onclick=()=>{CFG.pacerKmh=Math.max(20,CFG.pacerKmh-1);saveCfg();refreshButtons();};
 $('pacerPlus').onclick=()=>{CFG.pacerKmh=Math.min(70,CFG.pacerKmh+1);saveCfg();refreshButtons();};
 $('demoP').oninput=e=>{demoPower=+e.target.value;$('demoVal').textContent=demoPower;};
-$('connectBtn').onclick=connectTrainer;$('hrBtn').onclick=connectHr;
+$('connectBtn').onclick=connectTrainer;$('hrBtn').onclick=connectHr;$('di2Btn').onclick=connectDi2;
 $('demoBtn').onclick=()=>{S.src='demo';$('setup').classList.add('hide');refreshButtons();};
 $('settingsBtn').onclick=()=>{$('setup').classList.remove('hide');};
 $('endBtn').onclick=showSummary;$('sumClose').onclick=()=>$('summary').classList.add('hide');
@@ -206,5 +215,5 @@ function loop(now){requestAnimationFrame(loop);let dt=Math.min(0.1,(now-last)/10
   cameraUpdate(dt);hud(dt);renderer.render(scene,camera);}
 requestAnimationFrame(loop);
 $('loading').classList.add('hide');
-window.MT={S,CFG,trainer};   // pro ladění v konzoli
+window.MT={S,CFG,trainer,di2};   // pro ladění v konzoli
 })();
