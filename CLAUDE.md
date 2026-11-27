@@ -15,3 +15,9 @@ Webová aplikace pro trénink na chytrém trenažéru (Tacx Neo 2T, FTMS přes W
 - Žádný build, žádné npm. Three.js r128 z CDN (stejná verze jako simulátor).
 - Web Bluetooth funguje jen v Chromu/Edge přes HTTPS nebo localhost.
 - Po změně ověř, že stránka jde načíst bez chyby v konzoli a že demo režim jezdí.
+
+## Vydávání a zálohy
+
+- Hotové změny slučuj do `main` automaticky, bez ptaní (GitHub Pages: https://pavellehkyy-arch.github.io/motol-training/). Po sloučení napiš uživateli odkaz.
+- Před každým sloučením nech zálohu: na stávající `main` dej tag `zaloha-RRRR-MM-DD-HHMM` (čas Europe/Prague) a pushni ho. Slučuj přes `git merge --no-ff`, aby šla každá verze dohledat.
+- Historii `main` nikdy nepřepisuj (žádný force-push). Návrat ke staré verzi = nový commit, který obnoví soubory ze zálohy (`git checkout <tag> -- .`).
