@@ -52,13 +52,17 @@ trainer.onLog=s=>toast(s);
 hrm.onHr=h=>{S.hr=h;};hrm.onStatus=s=>{$('hrStatus').textContent='Pás: '+s;};
 
 // srozumitelná hláška z chyby Web Bluetooth; null = uživatel jen zavřel výběr zařízení
-function bleError(e){const m=(e&&e.message)||String(e);
-  if(e&&e.name==='NotFoundError'&&/cancel/i.test(m))return null;
-  if(/adapter not available|Bluetooth adapter/i.test(m))return 'Bluetooth v počítači je vypnutý nebo chybí. Zapni ho a zkus to znovu.';
-  if(e&&e.name==='SecurityError')return 'Prohlížeč Bluetooth nepovolil: stránka musí běžet přes HTTPS (nebo localhost) a ne ve vloženém okně.';
-  if(e&&e.name==='NotAllowedError')return 'Prohlížeč přístup k Bluetooth zakázal. Povol ho v nastavení webu (ikona zámku vedle adresy).';
-  if(e&&e.name==='NetworkError')return 'Spojení se nepodařilo. Je trenažér zapnutý a odpojený z jiných aplikací (Zwift, Tacx)?';
-  return m;}
+function bleError(e){const m=(e&&e.message!=null?String(e.message):String(e)).trim(),name=e&&e.name;
+  const where=e&&e.step?' (krok: '+e.step+')':'';
+  if((name==='NotFoundError'||name==='AbortError')&&/cancel|chooser|zru/i.test(m))return null;
+  if(/adapter not available|Bluetooth adapter|powered off|unsupported|unauthori/i.test(m))return 'Bluetooth je vypnutý nebo ho prohlížeč nesmí používat. Zapni Bluetooth a na iPhonu povol Bluefy v Nastavení → Soukromí → Bluetooth.';
+  if(name==='SecurityError')return 'Prohlížeč Bluetooth nepovolil: stránka musí běžet přes HTTPS (nebo localhost) a ne ve vloženém okně.';
+  if(name==='NotAllowedError')return 'Prohlížeč přístup k Bluetooth zakázal. Povol ho v nastavení webu (ikona zámku vedle adresy).';
+  if(name==='NotFoundError')return 'Trenažér se nenašel'+where+'. Je zapnutý (zatoč klikami) a odpojený z jiných aplikací (Zwift, Tacx, Garmin)?';
+  if(name==='NetworkError')return 'Spojení se nepodařilo'+where+'. Je trenažér zapnutý a odpojený z jiných aplikací (Zwift, Tacx, Garmin)?';
+  // Bluefy hlásí jen číslo: dej aspoň krok a radu
+  if(/^-?\d+$/.test(m))return 'Bluetooth hlásí kód '+m+where+'. Zatoč klikami, odpoj trenažér ze Zwiftu/Tacx/Garminu a ťukni na Připojit znovu (ukážou se všechna zařízení, vyber Tacx).';
+  return m+where;}
 async function connectTrainer(){$('trStatus').textContent='Trenažér: hledám…';
   try{await trainer.connect();S.src='trainer';$('setup').classList.add('hide');applyResistance(true);}
   catch(e){console.warn('Trenažér:',e);const m=bleError(e);$('trStatus').textContent='Trenažér: '+(m?'chyba – '+m:'nepřipojen');if(m)toast(m);}}

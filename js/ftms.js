@@ -7,9 +7,24 @@
 (function(){
 'use strict';
 
-const FTMS_SVC=0x1826,IBD=0x2ad2,CP=0x2ad9,STATUS=0x2ada;
-const CPS_SVC=0x1818,CPM=0x2a63;
-const HR_SVC=0x180d,HRM=0x2a37;
+// UUID jako plné řetězce: Bluefy (iPhone) s číselnými aliasy (0x1826) neumí a hází jen holý kód chyby
+const u16=n=>'0000'+n.toString(16).padStart(4,'0')+'-0000-1000-8000-00805f9b34fb';
+const FTMS_SVC=u16(0x1826),IBD=u16(0x2ad2),CP=u16(0x2ad9),STATUS=u16(0x2ada);
+const CPS_SVC=u16(0x1818),CPM=u16(0x2a63);
+const HR_SVC=u16(0x180d),HRM=u16(0x2a37);
+const DIS_SVC=u16(0x180a);
+
+// Chyba s označením kroku, ve kterém vznikla. Bluefy občas místo Error vrátí číslo nebo řetězec.
+function stepErr(step,e){
+  const err=e instanceof Error?e:new Error(e&&e.message!=null?String(e.message):String(e));
+  if(!(e instanceof Error)&&e&&e.name)try{Object.defineProperty(err,'name',{value:String(e.name)});}catch(_){}
+  if(err.step==null)err.step=step;if(e&&e.code!=null&&err.code==null)err.code=e.code;return err;}
+async function at(step,fn){try{return await fn();}catch(e){throw stepErr(step,e);}}
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+const isCancel=e=>!!e&&(e.name==='NotFoundError'||e.name==='AbortError')&&/cancel|chooser|zru/i.test(e.message||'');
+async function gattConnect(device){let last;
+  for(let i=0;i<3;i++){try{return await device.gatt.connect();}catch(e){last=e;await wait(600*(i+1));}}
+  throw last;}
 
 const OP={REQUEST_CONTROL:0x00,RESET:0x01,TARGET_POWER:0x05,START:0x07,STOP:0x08,SIM:0x11,RESPONSE:0x80};
 const RESULT={1:'OK',2:'nepodporováno',3:'špatný parametr',4:'selhalo',5:'řízení nepovoleno'};
@@ -50,26 +65,37 @@ function queue(){let p=Promise.resolve();return fn=>(p=p.then(fn,fn));}
 
 class Trainer{
   constructor(){this.device=null;this.cp=null;this.kind=null;this.controlled=false;this.onData=null;this.onStatus=null;this.onLog=null;
-    this._q=queue();this._wantConnected=false;this._lastSim=null;this._lastErg=null;}
+    this._q=queue();this._wantConnected=false;this.wide=false;this._lastSim=null;this._lastErg=null;}
   get name(){return this.device&&this.device.name||'trenažér';}
   status(s){this.onStatus&&this.onStatus(s);}
   log(s){this.onLog&&this.onLog(s);}
 
   async connect(){
     if(!supported())throw new Error('Tento prohlížeč neumí Web Bluetooth. Použij Chrome na počítači nebo na Androidu (na iPhonu aplikaci Bluefy).');
-    this.device=await navigator.bluetooth.requestDevice({filters:[{services:[FTMS_SVC]},{services:[CPS_SVC]},{namePrefix:'Tacx'}],optionalServices:[FTMS_SVC,CPS_SVC,HR_SVC]});
+    if(this.device&&this.device.gatt&&this.device.gatt.connected)try{this.device.gatt.disconnect();}catch(e){}
+    this.device=null;
+    const optionalServices=[FTMS_SVC,CPS_SVC,HR_SVC,DIS_SVC];
+    // Napoprvé filtr podle služeb; když s ním prohlížeč neumí (Bluefy), ukáže všechna zařízení.
+    if(!this.wide){
+      try{this.device=await navigator.bluetooth.requestDevice({filters:[{services:[FTMS_SVC]},{services:[CPS_SVC]},{namePrefix:'Tacx'}],optionalServices});}
+      catch(e){if(isCancel(e))throw stepErr('výběr zařízení',e);
+        this.log('Výběr s filtrem selhal ('+((e&&e.message)||e)+'), zobrazuji všechna zařízení…');this.wide=true;}}
+    if(this.wide&&!this.device){
+      try{this.device=await navigator.bluetooth.requestDevice({acceptAllDevices:true,optionalServices});}
+      catch(e){if(e&&e.name==='SecurityError')throw stepErr('výběr zařízení',new Error('Ťukni na Připojit znovu, ukážu všechna zařízení.'));
+        throw stepErr('výběr zařízení',e);}}
     this.device.addEventListener('gattserverdisconnected',()=>this._onDisconnect());
     this._wantConnected=true;await this._setup();}
 
   async _setup(){
     this.status('připojuji…');
-    const server=await this.device.gatt.connect();
+    const server=await at('spojení s trenažérem',()=>gattConnect(this.device));
     let ftms=null;try{ftms=await server.getPrimaryService(FTMS_SVC);}catch(e){}
     if(ftms){
       this.kind='FTMS';
-      const ibd=await ftms.getCharacteristic(IBD);
+      const ibd=await at('čtení výkonu (FTMS)',()=>ftms.getCharacteristic(IBD));
       ibd.addEventListener('characteristicvaluechanged',e=>this.onData&&this.onData(parseIndoorBikeData(e.target.value)));
-      await ibd.startNotifications();
+      await at('zapnutí dat (FTMS)',()=>ibd.startNotifications());
       try{
         this.cp=await ftms.getCharacteristic(CP);
         this.cp.addEventListener('characteristicvaluechanged',e=>this._onCpResponse(e.target.value));
@@ -77,12 +103,13 @@ class Trainer{
         await this._write([OP.REQUEST_CONTROL]);
         await this._write([OP.START]);
         this.controlled=true;
-      }catch(e){this.cp=null;this.controlled=false;this.log('Řízení odporu se nepodařilo převzít: '+e.message);}
+      }catch(e){this.cp=null;this.controlled=false;this.log('Řízení odporu se nepodařilo převzít: '+((e&&e.message)||e));}
     }else{
       this.kind='CPS';this.controlled=false;
-      const cps=await server.getPrimaryService(CPS_SVC),ch=await cps.getCharacteristic(CPM),parse=makeCpsParser();
+      const cps=await at('hledání služby výkonu',()=>server.getPrimaryService(CPS_SVC));
+      const ch=await at('čtení výkonu (CPS)',()=>cps.getCharacteristic(CPM)),parse=makeCpsParser();
       ch.addEventListener('characteristicvaluechanged',e=>this.onData&&this.onData(parse(e.target.value)));
-      await ch.startNotifications();
+      await at('zapnutí dat (CPS)',()=>ch.startNotifications());
     }
     this.status('připojeno');
     // po znovupřipojení obnov poslední nastavení odporu
@@ -98,19 +125,19 @@ class Trainer{
 
   // ERG: trenažér drží cílový výkon bez ohledu na kadenci
   setTargetPower(w){this._lastErg=w;this._lastSim=null;if(!this.controlled)return Promise.resolve();
-    const v=Math.round(Math.max(0,Math.min(2000,w)));return this._write([OP.TARGET_POWER,v&0xff,(v>>8)&0xff]).catch(e=>this.log(e.message));}
+    const v=Math.round(Math.max(0,Math.min(2000,w)));return this._write([OP.TARGET_POWER,v&0xff,(v>>8)&0xff]).catch(e=>this.log((e&&e.message)||String(e)));}
 
   // Simulace: trenažér počítá odpor sám ze sklonu, valivého odporu a odporu vzduchu
   // grade v %, crr bezrozměrné (0,0025 = dřevo), cw = ½·ρ·CdA v kg/m, wind v m/s
   setSimulation(p){this._lastSim=p;this._lastErg=null;if(!this.controlled)return Promise.resolve();
     const wind=Math.round((p.wind||0)*1000),grade=Math.round((p.grade||0)*100),crr=Math.round((p.crr||0.0025)*10000),cw=Math.round((p.cw||0.15)*100);
     const i16=v=>{v=Math.max(-32768,Math.min(32767,v));return [v&0xff,(v>>8)&0xff];};
-    return this._write([OP.SIM,...i16(wind),...i16(grade),Math.max(0,Math.min(255,crr)),Math.max(0,Math.min(255,cw))]).catch(e=>this.log(e.message));}
+    return this._write([OP.SIM,...i16(wind),...i16(grade),Math.max(0,Math.min(255,crr)),Math.max(0,Math.min(255,cw))]).catch(e=>this.log((e&&e.message)||String(e)));}
 
   async _onDisconnect(){this.cp=null;this.controlled=false;if(!this._wantConnected){this.status('odpojeno');return;}
     this.status('spojení ztraceno, zkouším znovu…');
     for(let i=0;i<5&&this._wantConnected;i++){await new Promise(r=>setTimeout(r,1500*(i+1)));
-      try{await this._setup();return;}catch(e){this.log('Pokus '+(i+1)+': '+e.message);}}
+      try{await this._setup();return;}catch(e){this.log('Pokus '+(i+1)+': '+((e&&e.message)||e));}}
     this.status('odpojeno');}
 
   disconnect(){this._wantConnected=false;try{if(this.controlled)this._write([OP.STOP,0x01]);}catch(e){}
@@ -121,11 +148,12 @@ class HeartRate{
   constructor(){this.device=null;this.onHr=null;this.onStatus=null;}
   async connect(){
     if(!supported())throw new Error('Tento prohlížeč neumí Web Bluetooth.');
-    this.device=await navigator.bluetooth.requestDevice({filters:[{services:[HR_SVC]}]});
+    this.device=await at('výběr pásu',()=>navigator.bluetooth.requestDevice({filters:[{services:[HR_SVC]}]}));
     this.device.addEventListener('gattserverdisconnected',()=>this.onStatus&&this.onStatus('odpojeno'));
-    const s=await this.device.gatt.connect(),svc=await s.getPrimaryService(HR_SVC),ch=await svc.getCharacteristic(HRM);
+    const s=await at('spojení s pásem',()=>gattConnect(this.device));
+    const svc=await at('hledání služby tepu',()=>s.getPrimaryService(HR_SVC)),ch=await at('čtení tepu',()=>svc.getCharacteristic(HRM));
     ch.addEventListener('characteristicvaluechanged',e=>this.onHr&&this.onHr(parseHr(e.target.value)));
-    await ch.startNotifications();this.onStatus&&this.onStatus('připojeno');}
+    await at('zapnutí tepu',()=>ch.startNotifications());this.onStatus&&this.onStatus('připojeno');}
   disconnect(){if(this.device&&this.device.gatt.connected)this.device.gatt.disconnect();}
 }
 
