@@ -36,9 +36,6 @@ button.primary{background:var(--acc);color:#111;border-color:var(--acc)}
 #menu{position:fixed;right:10px;top:62px;padding:8px;display:flex;flex-direction:column;gap:6px;width:200px;z-index:6;max-height:calc(100% - 140px);overflow:auto}
 #menu .pair{display:flex;gap:6px;align-items:center;justify-content:space-between}
 #menu .pair button{min-width:40px}
-#line{position:fixed;right:10px;bottom:14px;display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px}
-#line button{font-size:20px;width:52px;height:44px;padding:0}
-#lineName{font-size:11px;opacity:.85}
 #demoBox{position:fixed;left:50%;bottom:10px;transform:translateX(-50%);padding:6px 14px;width:min(420px,60vw);text-align:center;font-size:13px}
 #demoBox input{width:100%}
 #lapFlash{position:fixed;left:50%;top:28%;transform:translateX(-50%);font-size:30px;font-weight:900;text-shadow:0 3px 14px rgba(0,0,0,.7);opacity:0;pointer-events:none;white-space:nowrap}
@@ -75,6 +72,7 @@ button.primary{background:var(--acc);color:#111;border-color:var(--acc)}
   <div id="modeInfo">–</div>
   <div class="row"><span>Čas</span><span id="time">0:00</span></div>
   <div class="row"><span>Vzdálenost</span><span><span id="dist">0.00</span> km</span></div>
+  <div class="row"><span>Čára</span><span id="lineName">černá čára</span></div>
   <div class="row"><span>Kolo</span><span id="lapN">0</span></div>
   <div class="row"><span>Poslední</span><span id="lapLast">–</span></div>
   <div class="row"><span>Nejlepší</span><span id="lapBest">–</span></div>
@@ -94,11 +92,6 @@ button.primary{background:var(--acc);color:#111;border-color:var(--acc)}
   <button id="fsBtn">Celá obrazovka</button>
 </div>
 
-<div id="line" class="panel">
-  <button id="upBtn" title="Výš (šipka nahoru)">▲</button>
-  <span id="lineName">černá čára</span>
-  <button id="downBtn" title="Níž (šipka dolů)">▼</button>
-</div>
 
 <div id="demoBox" class="panel">Demo výkon: <b id="demoVal">0</b> W<input id="demoP" type="range" min="0" max="1200" step="10" value="0"></div>
 <div id="lapFlash"></div>
@@ -119,7 +112,7 @@ button.primary{background:var(--acc);color:#111;border-color:var(--acc)}
     <label>Tvoje hmotnost (kg) <input id="mass" type="number" min="30" max="200" step="1"></label>
     <label>FTP (W) <input id="ftp" type="number" min="50" max="600" step="5"></label>
     <p style="font-size:13px;margin:10px 0 0"><a href="diag.html" style="color:#c6ff1a">Diagnostika Bluetooth (páčky Di2)</a></p>
-    <p style="font-size:12px;opacity:.7;margin-top:12px">Ovládání: ťuknutí do obrazu přepne kameru, ☰ otevře menu (režim, vodič, souhrn). Šipky ▲▼ mění čáru na dráze (páčky Di2: levé skryté tlačítko níž, pravé výš; dlouhý stisk levého přepne kameru, pravého zapne vodiče), C přepíná kameru, + a − mění watty v ERG. Před připojením zapni trenažér a odpoj ho z ostatních aplikací (Zwift, Tacx app), Bluetooth spojení může mít jen jedna.</p>
+    <p style="font-size:12px;opacity:.7;margin-top:12px">Ovládání: ťuknutí do obrazu přepne kameru, ☰ otevře menu (režim, vodič, souhrn). Čáru na dráze mění šipky na klávesnici (páčky Di2: levé skryté tlačítko níž, pravé výš; dlouhý stisk levého přepne kameru, pravého zapne vodiče), C přepíná kameru, + a − mění watty v ERG. Před připojením zapni trenažér a odpoj ho z ostatních aplikací (Zwift, Tacx app), Bluetooth spojení může mít jen jedna.</p>
   </div>
 </div>
 

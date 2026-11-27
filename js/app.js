@@ -165,11 +165,11 @@ function lapFlash(t){const el=$('lapFlash');el.textContent='Kolo '+S.laps.length
 let toastT=null;function toast(msg,ms){const el=$('toast');el.textContent=msg;el.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove('show'),ms||5000);}
 
 // ---------- ovládání ----------
-function setLine(d){S.line=clamp(S.line+d,0,LINES.length-1);}
+function setLine(d){const n=clamp(S.line+d,0,LINES.length-1);if(n!==S.line){S.line=n;toast('Čára: '+LINES[n].n,1500);}}
 function cycleCam(){camMode=(camMode+1)%CAMS.length;$('camBtn').textContent='📷 '+CAMS[camMode];toast('Kamera: '+CAMS[camMode],1500);}
 // menu ☰: otevře/zavře ovládání; ťuknutí do obrazu menu zavře, nebo přepne kameru
 const menuOpen=()=>!$('menu').classList.contains('hide');
-function showMenu(on){$('menu').classList.toggle('hide',!on);$('line').classList.toggle('hide',on);$('menuBtn').classList.toggle('on',on);}
+function showMenu(on){$('menu').classList.toggle('hide',!on);$('menuBtn').classList.toggle('on',on);}
 $('menuBtn').onclick=()=>showMenu(!menuOpen());
 $('c').addEventListener('click',()=>{if(menuOpen())showMenu(false);else cycleCam();});
 function refreshButtons(){$('modeBtn').textContent=CFG.mode==='erg'?'Režim: ERG':'Režim: simulace';$('ergBox').style.display=CFG.mode==='erg'?'':'none';$('ergVal').textContent=CFG.erg;
@@ -180,7 +180,7 @@ addEventListener('keydown',e=>{if(e.target.tagName==='INPUT')return;
   else if(e.key==='c'||e.key==='C')cycleCam();
   else if(e.key==='+'){CFG.erg+=10;saveCfg();refreshButtons();applyResistance(true);}
   else if(e.key==='-'){CFG.erg=Math.max(50,CFG.erg-10);saveCfg();refreshButtons();applyResistance(true);}});
-$('upBtn').onclick=()=>setLine(1);$('downBtn').onclick=()=>setLine(-1);$('camBtn').onclick=cycleCam;
+$('camBtn').onclick=cycleCam;
 $('modeBtn').onclick=()=>{CFG.mode=CFG.mode==='erg'?'sim':'erg';saveCfg();refreshButtons();applyResistance(true);};
 $('ergMinus').onclick=()=>{CFG.erg=Math.max(50,CFG.erg-10);saveCfg();refreshButtons();applyResistance(true);};
 $('ergPlus').onclick=()=>{CFG.erg=Math.min(1500,CFG.erg+10);saveCfg();refreshButtons();applyResistance(true);};
